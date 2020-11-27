@@ -7,6 +7,7 @@ using System.Globalization;
 
 namespace ThreeDeeBear.Models.Ply
 {
+
     public enum PlyFormat
     {
         Ascii,
@@ -147,6 +148,17 @@ namespace ThreeDeeBear.Models.Ply
         {
             set { }
             get { return _elementName; } 
+        }
+
+        public static byte[] GetBytesSubarray(byte[] content, int start, int count)
+        {
+            byte[] subarray = new byte[count];
+            for (int i = 0; i < count; ++i)
+            {
+                subarray[i] = content[start + i];
+            }
+
+            return subarray;
         }
 
         protected bool ParseElementInfo(IList<string> headerUnparsed)
@@ -319,9 +331,9 @@ namespace ThreeDeeBear.Models.Ply
                     PlyMultiProperty xmultiProperty = (DictProperties["x"] as PlyMultiProperty);
                     PlyMultiProperty ymultiProperty = (DictProperties["y"] as PlyMultiProperty);
                     PlyMultiProperty zmultiProperty = (DictProperties["z"] as PlyMultiProperty);
-                    var x = System.BitConverter.ToSingle(bytes.SubArray(byteIndex + xmultiProperty.BytesOffset, xmultiProperty.ValueDataBytes), 0);
-                    var y = System.BitConverter.ToSingle(bytes.SubArray(byteIndex + ymultiProperty.BytesOffset, ymultiProperty.ValueDataBytes), 0);
-                    var z = System.BitConverter.ToSingle(bytes.SubArray(byteIndex + zmultiProperty.BytesOffset, zmultiProperty.ValueDataBytes), 0);
+                    var x = System.BitConverter.ToSingle(PlyElement.GetBytesSubarray(bytes, byteIndex + xmultiProperty.BytesOffset, xmultiProperty.ValueDataBytes), 0);
+                    var y = System.BitConverter.ToSingle(PlyElement.GetBytesSubarray(bytes, byteIndex + ymultiProperty.BytesOffset, ymultiProperty.ValueDataBytes), 0);
+                    var z = System.BitConverter.ToSingle(PlyElement.GetBytesSubarray(bytes, byteIndex + zmultiProperty.BytesOffset, zmultiProperty.ValueDataBytes), 0);
                     vertices.Add(new Vector3(x, y, z));
                 }
 
@@ -330,9 +342,9 @@ namespace ThreeDeeBear.Models.Ply
                     PlyMultiProperty xmultiProperty = (DictProperties["nx"] as PlyMultiProperty);
                     PlyMultiProperty ymultiProperty = (DictProperties["ny"] as PlyMultiProperty);
                     PlyMultiProperty zmultiProperty = (DictProperties["nz"] as PlyMultiProperty);
-                    var x = System.BitConverter.ToSingle(bytes.SubArray(byteIndex + xmultiProperty.BytesOffset, xmultiProperty.ValueDataBytes), 0);
-                    var y = System.BitConverter.ToSingle(bytes.SubArray(byteIndex + ymultiProperty.BytesOffset, ymultiProperty.ValueDataBytes), 0);
-                    var z = System.BitConverter.ToSingle(bytes.SubArray(byteIndex + zmultiProperty.BytesOffset, zmultiProperty.ValueDataBytes), 0);
+                    var x = System.BitConverter.ToSingle(PlyElement.GetBytesSubarray(bytes, byteIndex + xmultiProperty.BytesOffset, xmultiProperty.ValueDataBytes), 0);
+                    var y = System.BitConverter.ToSingle(PlyElement.GetBytesSubarray(bytes, byteIndex + ymultiProperty.BytesOffset, ymultiProperty.ValueDataBytes), 0);
+                    var z = System.BitConverter.ToSingle(PlyElement.GetBytesSubarray(bytes, byteIndex + zmultiProperty.BytesOffset, zmultiProperty.ValueDataBytes), 0);
                     normals.Add(new Vector3(x, y, z));
                 }
 
@@ -353,7 +365,7 @@ namespace ThreeDeeBear.Models.Ply
 
         private bool GetPositionIndex(int[] index)
         {
-            if (!HasPosition && index.Length != 3)
+            if (!HasPosition || index.Length != 3)
             {
                 return false;
             }
@@ -365,7 +377,7 @@ namespace ThreeDeeBear.Models.Ply
 
         private bool GetColorIndex(int[] index)
         {
-            if (!HasColor && index.Length != 4)
+            if (!HasColor || index.Length != 4)
             {
                 return false;
             }
@@ -378,7 +390,7 @@ namespace ThreeDeeBear.Models.Ply
 
         private bool GetNormalIndex(int[] index)
         {
-            if (!HasNormal && index.Length != 3)
+            if (!HasNormal || index.Length != 3)
             {
                 return false;
             }
@@ -456,7 +468,7 @@ namespace ThreeDeeBear.Models.Ply
                 {
                     for (int i=0; i<indexCount; ++i)
                     {
-                        triangles.Add(System.BitConverter.ToInt32(bytes.SubArray(faceIndex + 1 + i * bytesPerTriangleIndex, bytesPerTriangleIndex), 0));
+                        triangles.Add(System.BitConverter.ToInt32(PlyElement.GetBytesSubarray(bytes, faceIndex + 1 + i * bytesPerTriangleIndex, bytesPerTriangleIndex), 0));
                     }
                     bytesRead += 1 + indexCount * bytesPerTriangleIndex;
                 }

@@ -24,34 +24,72 @@ namespace ThreeDeeBear.Models.Ply
     }
     public static class PlyHandler
     {
-        public static Mesh GetMesh(string filename)
+        public static string GetOneLine(byte[] content, ref int start)
         {
-            if (File.Exists(filename))
+            StringBuilder builder = new StringBuilder("");
+            byte cur;
+            for (; ;)
             {
-                List<string> header = File.ReadLines(filename).TakeUntilIncluding(x => x == "end_header").ToList();
-                var headerParsed = new PlyHeader(header);
-                if (!headerParsed.VertexElement.IsValid ||
-                    !headerParsed.FaceElement.IsValid)
+                cur = content[start];
+                start = start + 1;
+                if (cur == '\n')
                 {
-                    return null;
+                    break;
                 }
+                builder.Append((char)cur);
+            }
+            return builder.ToString();
+        }
 
-                if (headerParsed.Format == PlyFormat.Ascii)
-                {
-                    return ParseAscii(File.ReadAllLines(filename).ToList(), headerParsed);
-                }
-                else if (headerParsed.Format == PlyFormat.BinaryLittleEndian)
-                {
-                    return ParseBinaryLittleEndian(filename, headerParsed);
-                }
-                else // todo: support BinaryBigEndian
-                {
-                    return null;
-                }
-
+        public static List<string> GetHeader(byte[] content)
+        {
+            List<string> header = new List<string>();
+            int iOffset = 0;
+            string curString = "";
+            while (curString.IndexOf("end_header") == -1)
+            {
+                curString = GetOneLine(content, ref iOffset);
+                header.Add(curString);
             }
 
-            return new Mesh();
+            return header;
+        }
+
+        public static List<string> GetLines(byte[] content)
+        {
+            List<string> lines = new List<string>();
+            int iOffset = 0;
+            int allBytes = content.Length;
+            while (iOffset < allBytes)
+            {
+                lines.Add(GetOneLine(content, ref iOffset));
+            }
+
+            return lines;
+        }
+
+        public static Mesh GetMesh(byte[] content)
+        {
+            var header = GetHeader(content);
+            var headerParsed = new PlyHeader(header);
+            if (!headerParsed.VertexElement.IsValid ||
+                !headerParsed.FaceElement.IsValid)
+            {
+                return null;
+            }
+
+            if (headerParsed.Format == PlyFormat.Ascii)
+            {
+                return ParseAscii(GetLines(content), headerParsed);
+            }
+            else if (headerParsed.Format == PlyFormat.BinaryLittleEndian)
+            {
+                return ParseBinaryLittleEndian(content, headerParsed);
+            }
+            else // todo: support BinaryBigEndian
+            {
+                return null;
+            }
         }
 
         #region Ascii
@@ -86,13 +124,13 @@ namespace ThreeDeeBear.Models.Ply
 
         #region Binary
 
-        private static Mesh ParseBinaryLittleEndian(string path, PlyHeader header)
+        private static Mesh ParseBinaryLittleEndian(byte[] content, PlyHeader header)
         {
             Mesh mesh = new Mesh();
 
             var headerAsText = header.RawHeader.Aggregate((a, b) => $"{a}\n{b}") + "\n";
             var headerAsBytes = Encoding.ASCII.GetBytes(headerAsText);
-            var withoutHeader = File.ReadAllBytes(path).Skip(headerAsBytes.Length).ToArray();
+            var withoutHeader = content.Skip(headerAsBytes.Length).ToArray();
 
             IList<Vector3> vertices;
             IList<Color32> colors;

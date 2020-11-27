@@ -2,13 +2,14 @@
 using System.Collections.Generic;
 using UnityEngine;
 using ThreeDeeBear.Models.Ply;
+using System.IO;
 
 public class Main : MonoBehaviour
 {
     // Start is called before the first frame update
     void Start()
     {
-        Mesh mesh = PlyHandler.GetMesh("rabit-binary.ply");
+        Mesh mesh = PlyHandler.GetMesh(File.ReadAllBytes("rabit-binary.ply"));
 
         GameObject g = new GameObject();
         mesh.name = g.name = "mesh";
