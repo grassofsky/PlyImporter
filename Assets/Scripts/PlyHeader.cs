@@ -167,6 +167,18 @@ namespace ThreeDeeBear.Models.Ply
 
             return subarray;
         }
+		
+        protected static void ToCoordinateSpaceLeft(ref float xref, ref float yref, ref float zref)
+        {
+            xref = -xref;
+        }
+
+        protected static void ToCoordinateSpaceLeft(ref List<int> triangle)
+        {
+            int tmp = triangle[2];
+            triangle[2] = triangle[1];
+            triangle[1] = tmp;
+        }
 
         protected bool ParseElementInfo(IList<string> headerUnparsed)
         {
@@ -311,6 +323,7 @@ namespace ThreeDeeBear.Models.Ply
                     float.TryParse(vertexProperties[positionIndex[0]], NumberStyles.Float, CultureInfo.InvariantCulture, out x);
                     float.TryParse(vertexProperties[positionIndex[1]], NumberStyles.Float, CultureInfo.InvariantCulture, out y);
                     float.TryParse(vertexProperties[positionIndex[2]], NumberStyles.Float, CultureInfo.InvariantCulture, out z);
+                    ToCoordinateSpaceLeft(ref x, ref y, ref z);
                     vertices.Add(new Vector3(x, y, z));
                 }
                 if (HasNormal)
@@ -319,6 +332,7 @@ namespace ThreeDeeBear.Models.Ply
                     float.TryParse(vertexProperties[normalIndex[0]], NumberStyles.Float, CultureInfo.InvariantCulture, out x);
                     float.TryParse(vertexProperties[normalIndex[1]], NumberStyles.Float, CultureInfo.InvariantCulture, out y);
                     float.TryParse(vertexProperties[normalIndex[2]], NumberStyles.Float, CultureInfo.InvariantCulture, out z);
+                    ToCoordinateSpaceLeft(ref x, ref y, ref z);
                     normals.Add(new Vector3(x, y, z));
                 }
                 if (HasColor)
@@ -358,6 +372,7 @@ namespace ThreeDeeBear.Models.Ply
                     var x = System.BitConverter.ToSingle(PlyElement.GetBytesSubarray(bytes, byteIndex + xmultiProperty.BytesOffset, xmultiProperty.ValueDataBytes), 0);
                     var y = System.BitConverter.ToSingle(PlyElement.GetBytesSubarray(bytes, byteIndex + ymultiProperty.BytesOffset, ymultiProperty.ValueDataBytes), 0);
                     var z = System.BitConverter.ToSingle(PlyElement.GetBytesSubarray(bytes, byteIndex + zmultiProperty.BytesOffset, zmultiProperty.ValueDataBytes), 0);
+                    ToCoordinateSpaceLeft(ref x, ref y, ref z);
                     vertices.Add(new Vector3(x, y, z));
                 }
 
@@ -369,6 +384,7 @@ namespace ThreeDeeBear.Models.Ply
                     var x = System.BitConverter.ToSingle(PlyElement.GetBytesSubarray(bytes, byteIndex + xmultiProperty.BytesOffset, xmultiProperty.ValueDataBytes), 0);
                     var y = System.BitConverter.ToSingle(PlyElement.GetBytesSubarray(bytes, byteIndex + ymultiProperty.BytesOffset, ymultiProperty.ValueDataBytes), 0);
                     var z = System.BitConverter.ToSingle(PlyElement.GetBytesSubarray(bytes, byteIndex + zmultiProperty.BytesOffset, zmultiProperty.ValueDataBytes), 0);
+                    ToCoordinateSpaceLeft(ref x, ref y, ref z);
                     normals.Add(new Vector3(x, y, z));
                 }
 
@@ -467,7 +483,9 @@ namespace ThreeDeeBear.Models.Ply
                     return;
                 }
 
-                triangles.AddRange(split.ToList().GetRange(1, 3).Select(x => Convert.ToInt32(x)).ToList());
+                List<int> triangle = split.ToList().GetRange(1, 3).Select(x => Convert.ToInt32(x)).ToList();
+                ToCoordinateSpaceLeft(ref triangle);
+                triangles.AddRange(triangle);
             }
         }
 

@@ -86,6 +86,10 @@ comment property string name what_ever_you_want
 - `name`的类型必须是`string`；
 - 具体的名字`what_ever_you_want`中不能带空格；
 
+### 5. Convert right hand coordinate to left hand coordinate
+
+由于unity中的坐标是左手坐标系，而通常情况下，存储的网格模型的坐标系为右手坐标系，因此增加坐标系转换的逻辑。
+
 ## TODO
 
 - 支持PlyEdgeElement；
