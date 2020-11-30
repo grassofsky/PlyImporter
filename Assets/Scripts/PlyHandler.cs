@@ -1,6 +1,5 @@
 using System.Collections;
 using System.Collections.Generic;
-using System.IO;
 using UnityEngine;
 using System.Linq;
 using System;
@@ -11,15 +10,14 @@ namespace ThreeDeeBear.Models.Ply
 {
     public class PlyResult
     {
-        public List<Vector3> Vertices;
-        public List<int> Triangles;
-        public List<Color> Colors;
+        public Mesh MeshResult;
+        public Color MeshColor;
 
-        public PlyResult(List<Vector3> vertices, List<int> triangles, List<Color> colors)
+
+        public PlyResult(Mesh mesh, Color color)
         {
-            Vertices = vertices;
-            Triangles = triangles;
-            Colors = colors;
+            MeshResult = mesh;
+            MeshColor = color;
         }
     }
     public static class PlyHandler
@@ -68,8 +66,9 @@ namespace ThreeDeeBear.Models.Ply
             return lines;
         }
 
-        public static Mesh GetMesh(byte[] content)
+        public static PlyResult GetResult(byte[] content)
         {
+            Mesh mesh = null;
             var header = GetHeader(content);
             var headerParsed = new PlyHeader(header);
             if (!headerParsed.VertexElement.IsValid ||
@@ -80,16 +79,19 @@ namespace ThreeDeeBear.Models.Ply
 
             if (headerParsed.Format == PlyFormat.Ascii)
             {
-                return ParseAscii(GetLines(content), headerParsed);
+                mesh = ParseAscii(GetLines(content), headerParsed);
             }
             else if (headerParsed.Format == PlyFormat.BinaryLittleEndian)
             {
-                return ParseBinaryLittleEndian(content, headerParsed);
+                mesh = ParseBinaryLittleEndian(content, headerParsed);
             }
             else // todo: support BinaryBigEndian
             {
                 return null;
             }
+
+            mesh.name = headerParsed.GlobalNameElement.GetName();
+            return new PlyResult(mesh, headerParsed.GloablMaterialElement.GetColor());
         }
 
         #region Ascii

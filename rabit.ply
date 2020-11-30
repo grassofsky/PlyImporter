@@ -1,6 +1,13 @@
 ply
 format ascii 1.0
 comment VCGLIB generated
+comment element g_material
+comment property uchar red 255
+comment property uchar green 0
+comment property uchar blue 0
+comment property uchar alpha 255
+comment element g_name
+comment property string name rabit
 element vertex 6462
 property float x
 property float y

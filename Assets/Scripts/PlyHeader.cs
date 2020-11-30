@@ -36,6 +36,7 @@ namespace ThreeDeeBear.Models.Ply
             nf_int,
             nf_float,
             nf_double,
+            nf_string,
             nf_invalid
         };
 
@@ -103,6 +104,9 @@ namespace ThreeDeeBear.Models.Ply
                 case "double":
                     numFormat = ENumFormat.nf_double;
                     break;
+                case "string":
+                    numFormat = ENumFormat.nf_string;
+                    break;
                 default:
                     numFormat = ENumFormat.nf_invalid;
                     break;
@@ -114,13 +118,15 @@ namespace ThreeDeeBear.Models.Ply
     public class PlyMultiProperty : PlyProperty
     {
         public int BytesOffset;
+        public string Value = null; // Used for global property
 
-        public PlyMultiProperty(string format, string name, int index, int bytesOffset) : base(format)
+        public PlyMultiProperty(string format, string name, int index, int bytesOffset, string value = null) : base(format)
         {
             BytesOffset = bytesOffset;
             IsValid = ValueNumFormat != ENumFormat.nf_invalid;
             _name = name;
             Index = index;
+            Value = value;
         }
     }
 
@@ -138,16 +144,17 @@ namespace ThreeDeeBear.Models.Ply
 
     public abstract class PlyElement
     {
-        protected string _elementName;
-
         public bool IsValid = true;
         public int NElement;
         public IDictionary<string, PlyProperty> DictProperties = null;
 
-        public string ElementName 
+        public string ElementName { set; get; } 
+        public bool IsGlobal { set; get; }
+
+        public PlyElement(string name, bool isGlobal=false)
         {
-            set { }
-            get { return _elementName; } 
+            ElementName = name;
+            IsGlobal = isGlobal;
         }
 
         public static byte[] GetBytesSubarray(byte[] content, int start, int count)
@@ -163,13 +170,13 @@ namespace ThreeDeeBear.Models.Ply
 
         protected bool ParseElementInfo(IList<string> headerUnparsed)
         {
-            var elementStartIndex = headerUnparsed.IndexOf(headerUnparsed.FirstOrDefault(x => x.Contains("element " + _elementName)));
+            var elementStartIndex = headerUnparsed.IndexOf(headerUnparsed.FirstOrDefault(x => x.Contains("element " + ElementName)));
             if (elementStartIndex == -1)
             {
                 return false;
             }
 
-            NElement = Convert.ToInt32(headerUnparsed[elementStartIndex].Split(' ')[2]);
+            NElement = IsGlobal ? 1 : Convert.ToInt32(headerUnparsed[elementStartIndex].Split(' ')[2]);
             if (!ParsePropertyList(headerUnparsed, elementStartIndex) && !ParseMultiProperties(headerUnparsed, elementStartIndex))
             {
                 return false;
@@ -180,6 +187,11 @@ namespace ThreeDeeBear.Models.Ply
 
         private bool ParsePropertyList(IList<string> header, int elementIndex)
         {
+            if (IsGlobal)
+            {
+                return false;
+            }
+
             DictProperties = new Dictionary<string, PlyProperty>();
             if (header[elementIndex+1].Contains("property list"))
             {
@@ -187,7 +199,7 @@ namespace ThreeDeeBear.Models.Ply
                 PlyListProperty plyProperty = new PlyListProperty(propertyElements[2], propertyElements[3], propertyElements[4]);
                 if (!plyProperty.IsValid)
                 {
-                    Debug.LogWarning("Ply: Unknown property value type of element " + _elementName);
+                    Debug.LogWarning("Ply: Unknown property value type of element " + ElementName);
                     return false;
                 }
                 DictProperties.Add(propertyElements[4], plyProperty);
@@ -202,23 +214,36 @@ namespace ThreeDeeBear.Models.Ply
 
         private bool ParseMultiProperties(IList<string> header, int elementIndex)
         {
+            int propertyIndexOffset = 0;
+            if (IsGlobal)
+            {
+                propertyIndexOffset = 1;
+            }
             DictProperties = new Dictionary<string, PlyProperty>();
             int iStart = elementIndex + 1;
             int bytesOffset = 0;
+            string value = null;
             for (int i = iStart; i < header.Count; i++)
             {
                 var propertyLine = header[i];
                 if (propertyLine.Contains("property"))
                 {
                     var propertyElements =  propertyLine.Split(' ');
-                    PlyMultiProperty plyProperty = new PlyMultiProperty(propertyElements[1], propertyElements[2], i - iStart, bytesOffset);
-                    bytesOffset += plyProperty.ValueDataBytes;
+                    if (IsGlobal)
+                    {
+                        value = propertyElements[3 + propertyIndexOffset];
+                    }
+                    PlyMultiProperty plyProperty = new PlyMultiProperty(propertyElements[1 + propertyIndexOffset], propertyElements[2 + propertyIndexOffset], i - iStart, bytesOffset, value);
+                    if (!IsGlobal)
+                    {
+                        bytesOffset += plyProperty.ValueDataBytes;
+                    }
                     if (!plyProperty.IsValid)
                     {
-                        Debug.LogWarning("Ply: Unknown property value type of element " + _elementName);
+                        Debug.LogWarning("Ply: Unknown property value type of element " + ElementName);
                         return false;
                     }
-                    DictProperties.Add(propertyElements[2], plyProperty);
+                    DictProperties.Add(propertyElements[2 + propertyIndexOffset], plyProperty);
                 }
                 else
                 {
@@ -245,9 +270,8 @@ namespace ThreeDeeBear.Models.Ply
         public bool HasColor = false;
         public bool HasNormal = false;
 
-        public PlyVertexElement(IList<string> headerUnparsed)
+        public PlyVertexElement(IList<string> headerUnparsed) : base("vertex")
         {
-            _elementName = "vertex";
             if (!ParseElementInfo(headerUnparsed))
             {
                 IsValid = false;
@@ -417,9 +441,8 @@ namespace ThreeDeeBear.Models.Ply
 
     public class PlyFaceElement : PlyElement
     {
-        public PlyFaceElement(IList<string> headerUnparsed)
+        public PlyFaceElement(IList<string> headerUnparsed) : base("face")
         {
-            _elementName = "face";
             if (!ParseElementInfo(headerUnparsed))
             {
                 IsValid = false;
@@ -499,9 +522,8 @@ namespace ThreeDeeBear.Models.Ply
     /// </summary>
     public class PlyEdgeElement : PlyElement
     {
-        PlyEdgeElement()
+        public PlyEdgeElement(IList<string> headerUnparsed) : base("edge")
         {
-            _elementName = "edge";
         }
 
         public bool IsElementValid()
@@ -510,11 +532,79 @@ namespace ThreeDeeBear.Models.Ply
         }
     }
 
+    public class PlyGlobalMaterialElement : PlyElement
+    {
+        public PlyGlobalMaterialElement(IList<string> headerUnparsed) : base("g_material", true)
+        {
+            if (!ParseElementInfo(headerUnparsed))
+            {
+                IsValid = false;
+                return;
+            }
+
+            IsValid = IsValid && IsElementValid();
+        }
+
+        public Color GetColor()
+        {
+            if (!IsValid)
+            {
+                return new Color(1.0f, 1.0f, 1.0f, 1.0f);
+            }
+
+            byte r, g, b, a;
+            byte.TryParse((DictProperties["red"] as PlyMultiProperty).Value, out r);
+            byte.TryParse((DictProperties["green"] as PlyMultiProperty).Value, out g);
+            byte.TryParse((DictProperties["blue"] as PlyMultiProperty).Value, out b);
+            byte.TryParse((DictProperties["alpha"] as PlyMultiProperty).Value, out a);
+            return new Color((float)r/255.0f, (float)g/255.0f, (float)b/255.0f, (float)a/255.0f);
+        }
+
+        private bool IsElementValid()
+        {
+            bool HasColor = DictProperties.ContainsKey("red") && DictProperties.ContainsKey("green") &&
+                            DictProperties.ContainsKey("blue") && DictProperties.ContainsKey("alpha");
+
+            return HasColor && CheckValueDataTypeEqual(new List<string> { "red", "green", "blue", "alpha" }, PlyProperty.ENumFormat.nf_uchar);
+        }
+    }
+
+    public class PlyGlobalNameElement : PlyElement
+    {
+        public PlyGlobalNameElement(IList<string> headerUnparsed) : base("g_name", true)
+        {
+            if (!ParseElementInfo(headerUnparsed))
+            {
+                IsValid = false;
+                return;
+            }
+
+            IsValid = IsValid && IsElementValid();
+        }
+
+        public string GetName()
+        {
+            if (!IsValid)
+            {
+                return "";
+            }
+
+            return (DictProperties["name"] as PlyMultiProperty).Value;
+        }
+
+        private bool IsElementValid()
+        {
+            return DictProperties.ContainsKey("name") && DictProperties.Count == 1 && CheckValueDataTypeEqual(new List<string> { "name" }, PlyProperty.ENumFormat.nf_string);
+        }
+    }
+
     public class PlyHeader
     {
         public PlyFormat Format;
         public PlyVertexElement VertexElement;
         public PlyFaceElement FaceElement;
+        public PlyGlobalMaterialElement GloablMaterialElement;
+        public PlyGlobalNameElement GlobalNameElement;
 
         public List<string> RawHeader;
 
@@ -523,6 +613,8 @@ namespace ThreeDeeBear.Models.Ply
             Format = GetFormat(headerUnparsed.FirstOrDefault(x => x.Contains("format")).Split(' ')[1]);
             VertexElement = new PlyVertexElement(headerUnparsed);
             FaceElement = new PlyFaceElement(headerUnparsed);
+            GloablMaterialElement = new PlyGlobalMaterialElement(headerUnparsed);
+            GlobalNameElement = new PlyGlobalNameElement(headerUnparsed);
             RawHeader = headerUnparsed;
         }
 
