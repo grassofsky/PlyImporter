@@ -90,7 +90,7 @@ namespace ThreeDeeBear.Models.Ply
                 return null;
             }
 
-            mesh.name = headerParsed.GlobalNameElement.GetName();
+            mesh.name = headerParsed.GlobalMeshInfoElement.GetName();
             return new PlyResult(mesh, headerParsed.GloablMaterialElement.GetColor());
         }
 

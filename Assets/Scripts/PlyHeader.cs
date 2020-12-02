@@ -7,6 +7,11 @@ using System.Globalization;
 
 namespace ThreeDeeBear.Models.Ply
 {
+    public enum CoordinateType
+    {
+        Right,
+        Left
+    }
 
     public enum PlyFormat
     {
@@ -45,8 +50,6 @@ namespace ThreeDeeBear.Models.Ply
         public ENumFormat ValueNumFormat;
 
         public int ValueDataBytes;
-
-        public string Name { set { } get { return _name; } }
 
         public int Index = -1;
 
@@ -168,18 +171,6 @@ namespace ThreeDeeBear.Models.Ply
             return subarray;
         }
 		
-        protected static void ToCoordinateSpaceLeft(ref float xref, ref float yref, ref float zref)
-        {
-            xref = -xref;
-        }
-
-        protected static void ToCoordinateSpaceLeft(ref List<int> triangle)
-        {
-            int tmp = triangle[2];
-            triangle[2] = triangle[1];
-            triangle[1] = tmp;
-        }
-
         protected bool ParseElementInfo(IList<string> headerUnparsed)
         {
             var elementStartIndex = headerUnparsed.IndexOf(headerUnparsed.FirstOrDefault(x => x.Contains("element " + ElementName)));
@@ -282,8 +273,11 @@ namespace ThreeDeeBear.Models.Ply
         public bool HasColor = false;
         public bool HasNormal = false;
 
-        public PlyVertexElement(IList<string> headerUnparsed) : base("vertex")
+        private PlyHeader _header;
+
+        public PlyVertexElement(IList<string> headerUnparsed, PlyHeader header) : base("vertex")
         {
+            _header = header;
             if (!ParseElementInfo(headerUnparsed))
             {
                 IsValid = false;
@@ -314,26 +308,30 @@ namespace ThreeDeeBear.Models.Ply
             GetNormalIndex(normalIndex);
             GetColorIndex(colorIndex);
 
+            int[] coordinateTranslate;
+            int[] signs;
+            _header.GlobalMeshInfoElement.GetCoordinateTransalte(out coordinateTranslate, out signs);
+            float ratioToMeter = _header.GlobalMeshInfoElement.GetUnitToMeterRatio();
+            float[] value = new float[3];
+            int normalSign = _header.GlobalMeshInfoElement.GetCoordinateType() == CoordinateType.Left ? 1 : -1;
             foreach (var vertexContent in vertexContents)
             {
                 var vertexProperties = vertexContent.Split(' ');
                 if (HasPosition)
                 {
-                    float x, y, z;
-                    float.TryParse(vertexProperties[positionIndex[0]], NumberStyles.Float, CultureInfo.InvariantCulture, out x);
-                    float.TryParse(vertexProperties[positionIndex[1]], NumberStyles.Float, CultureInfo.InvariantCulture, out y);
-                    float.TryParse(vertexProperties[positionIndex[2]], NumberStyles.Float, CultureInfo.InvariantCulture, out z);
-                    ToCoordinateSpaceLeft(ref x, ref y, ref z);
-                    vertices.Add(new Vector3(x, y, z));
+                    float.TryParse(vertexProperties[positionIndex[0]], NumberStyles.Float, CultureInfo.InvariantCulture, out value[0]);
+                    float.TryParse(vertexProperties[positionIndex[1]], NumberStyles.Float, CultureInfo.InvariantCulture, out value[1]);
+                    float.TryParse(vertexProperties[positionIndex[2]], NumberStyles.Float, CultureInfo.InvariantCulture, out value[2]);
+                    vertices.Add(new Vector3(value[coordinateTranslate[0]] * signs[0], value[coordinateTranslate[1]] * signs[1], value[coordinateTranslate[2]] * signs[2]) * ratioToMeter);
                 }
                 if (HasNormal)
                 {
-                    float x, y, z;
-                    float.TryParse(vertexProperties[normalIndex[0]], NumberStyles.Float, CultureInfo.InvariantCulture, out x);
-                    float.TryParse(vertexProperties[normalIndex[1]], NumberStyles.Float, CultureInfo.InvariantCulture, out y);
-                    float.TryParse(vertexProperties[normalIndex[2]], NumberStyles.Float, CultureInfo.InvariantCulture, out z);
-                    ToCoordinateSpaceLeft(ref x, ref y, ref z);
-                    normals.Add(new Vector3(x, y, z));
+                    float.TryParse(vertexProperties[normalIndex[0]], NumberStyles.Float, CultureInfo.InvariantCulture, out value[0]);
+                    float.TryParse(vertexProperties[normalIndex[1]], NumberStyles.Float, CultureInfo.InvariantCulture, out value[1]);
+                    float.TryParse(vertexProperties[normalIndex[2]], NumberStyles.Float, CultureInfo.InvariantCulture, out value[2]);
+                    Vector3 normal = new Vector3(value[coordinateTranslate[0]] * signs[0], value[coordinateTranslate[1]] * signs[1], value[coordinateTranslate[2]] * signs[2]) * ratioToMeter;
+                    normal.Normalize();
+                    normals.Add(normal * normalSign);
                 }
                 if (HasColor)
                 {
@@ -360,6 +358,13 @@ namespace ThreeDeeBear.Models.Ply
                 bytesPerVertex += keyvalue.Value.ValueDataBytes;
             }
             bytesUsed = bytesPerVertex * NElement;
+
+            int[] coordinateTranslate;
+            int[] signs;
+            _header.GlobalMeshInfoElement.GetCoordinateTransalte(out coordinateTranslate, out signs);
+            float ratioToMeter = _header.GlobalMeshInfoElement.GetUnitToMeterRatio();
+            float[] value = new float[3];
+            int normalSign = _header.GlobalMeshInfoElement.GetCoordinateType() == CoordinateType.Left ? 1 : -1;
             for (int i = 0; i < NElement; ++i)
             {
                 int byteIndex = i * bytesPerVertex;
@@ -369,11 +374,10 @@ namespace ThreeDeeBear.Models.Ply
                     PlyMultiProperty xmultiProperty = (DictProperties["x"] as PlyMultiProperty);
                     PlyMultiProperty ymultiProperty = (DictProperties["y"] as PlyMultiProperty);
                     PlyMultiProperty zmultiProperty = (DictProperties["z"] as PlyMultiProperty);
-                    var x = System.BitConverter.ToSingle(PlyElement.GetBytesSubarray(bytes, byteIndex + xmultiProperty.BytesOffset, xmultiProperty.ValueDataBytes), 0);
-                    var y = System.BitConverter.ToSingle(PlyElement.GetBytesSubarray(bytes, byteIndex + ymultiProperty.BytesOffset, ymultiProperty.ValueDataBytes), 0);
-                    var z = System.BitConverter.ToSingle(PlyElement.GetBytesSubarray(bytes, byteIndex + zmultiProperty.BytesOffset, zmultiProperty.ValueDataBytes), 0);
-                    ToCoordinateSpaceLeft(ref x, ref y, ref z);
-                    vertices.Add(new Vector3(x, y, z));
+                    value[0] = System.BitConverter.ToSingle(PlyElement.GetBytesSubarray(bytes, byteIndex + xmultiProperty.BytesOffset, xmultiProperty.ValueDataBytes), 0);
+                    value[1] = System.BitConverter.ToSingle(PlyElement.GetBytesSubarray(bytes, byteIndex + ymultiProperty.BytesOffset, ymultiProperty.ValueDataBytes), 0);
+                    value[2] = System.BitConverter.ToSingle(PlyElement.GetBytesSubarray(bytes, byteIndex + zmultiProperty.BytesOffset, zmultiProperty.ValueDataBytes), 0);
+                    vertices.Add(new Vector3(value[coordinateTranslate[0]]*signs[0], value[coordinateTranslate[1]]*signs[1], value[coordinateTranslate[2]]*signs[2]) * ratioToMeter);
                 }
 
                 if (HasNormal)
@@ -381,11 +385,12 @@ namespace ThreeDeeBear.Models.Ply
                     PlyMultiProperty xmultiProperty = (DictProperties["nx"] as PlyMultiProperty);
                     PlyMultiProperty ymultiProperty = (DictProperties["ny"] as PlyMultiProperty);
                     PlyMultiProperty zmultiProperty = (DictProperties["nz"] as PlyMultiProperty);
-                    var x = System.BitConverter.ToSingle(PlyElement.GetBytesSubarray(bytes, byteIndex + xmultiProperty.BytesOffset, xmultiProperty.ValueDataBytes), 0);
-                    var y = System.BitConverter.ToSingle(PlyElement.GetBytesSubarray(bytes, byteIndex + ymultiProperty.BytesOffset, ymultiProperty.ValueDataBytes), 0);
-                    var z = System.BitConverter.ToSingle(PlyElement.GetBytesSubarray(bytes, byteIndex + zmultiProperty.BytesOffset, zmultiProperty.ValueDataBytes), 0);
-                    ToCoordinateSpaceLeft(ref x, ref y, ref z);
-                    normals.Add(new Vector3(x, y, z));
+                    value[0] = System.BitConverter.ToSingle(PlyElement.GetBytesSubarray(bytes, byteIndex + xmultiProperty.BytesOffset, xmultiProperty.ValueDataBytes), 0);
+                    value[1] = System.BitConverter.ToSingle(PlyElement.GetBytesSubarray(bytes, byteIndex + ymultiProperty.BytesOffset, ymultiProperty.ValueDataBytes), 0);
+                    value[2] = System.BitConverter.ToSingle(PlyElement.GetBytesSubarray(bytes, byteIndex + zmultiProperty.BytesOffset, zmultiProperty.ValueDataBytes), 0);
+                    Vector3 normal = new Vector3(value[coordinateTranslate[0]]*signs[0], value[coordinateTranslate[1]]*signs[1], value[coordinateTranslate[2]]*signs[2]) * ratioToMeter;
+                    normal.Normalize();
+                    normals.Add(normal * normalSign);
                 }
 
                 if (HasColor)
@@ -484,7 +489,6 @@ namespace ThreeDeeBear.Models.Ply
                 }
 
                 List<int> triangle = split.ToList().GetRange(1, 3).Select(x => Convert.ToInt32(x)).ToList();
-                ToCoordinateSpaceLeft(ref triangle);
                 triangles.AddRange(triangle);
             }
         }
@@ -587,9 +591,14 @@ namespace ThreeDeeBear.Models.Ply
         }
     }
 
-    public class PlyGlobalNameElement : PlyElement
+    public class PlyGlobalMeshInfoElement : PlyElement
     {
-        public PlyGlobalNameElement(IList<string> headerUnparsed) : base("g_name", true)
+        private List<string> _validKey = new List<string>{ "name", "unit", "x_inner", "y_inner", "z_inner", "coordinate" };
+        private List<string> _validValue = new List<string> { "cm", "m", "mm", "x", "y", "z", "-x", "-y", "-z", "right", "left" };
+
+        private Dictionary<string, int> _axises = new Dictionary<string, int> { { "x", 0 }, { "y", 1 }, { "z", 2 } };
+
+        public PlyGlobalMeshInfoElement(IList<string> headerUnparsed) : base("g_meshinfo", true)
         {
             if (!ParseElementInfo(headerUnparsed))
             {
@@ -597,7 +606,23 @@ namespace ThreeDeeBear.Models.Ply
                 return;
             }
 
-            IsValid = IsValid && IsElementValid();
+            foreach (var element in DictProperties)
+            {
+                if (element.Key == "name")
+                {
+                    continue;
+                }
+                if (!_validKey.Contains(element.Key))
+                {
+                    IsValid = false;
+                    break;
+                }
+                if (!_validValue.Contains((element.Value as PlyMultiProperty).Value))
+                {
+                    IsValid = false;
+                    break;
+                }
+            }
         }
 
         public string GetName()
@@ -610,9 +635,88 @@ namespace ThreeDeeBear.Models.Ply
             return (DictProperties["name"] as PlyMultiProperty).Value;
         }
 
-        private bool IsElementValid()
+        public void GetCoordinateTransalte(out int[] coordinate, out int[] sign)
         {
-            return DictProperties.ContainsKey("name") && DictProperties.Count == 1 && CheckValueDataTypeEqual(new List<string> { "name" }, PlyProperty.ENumFormat.nf_string);
+            coordinate = new int[3];
+            sign = new int[3];
+            for (int i=0; i<coordinate.Length; ++i)
+            {
+                coordinate[i] = i;
+                sign[i] = 1;
+            }
+
+            if (!IsValid)
+            {
+                return;
+            }
+            
+            if (DictProperties.ContainsKey("x_inner"))
+            {
+                string value = (DictProperties["x_inner"] as PlyMultiProperty).Value;
+                if (value[0] == '-')
+                {
+                    sign[0] = -1;
+                    value = value.Substring(1);
+                }
+                coordinate[0] = _axises[value];
+            }
+
+            if (DictProperties.ContainsKey("y_inner"))
+            {
+                string value = (DictProperties["y_inner"] as PlyMultiProperty).Value;
+                if (value[0] == '-')
+                {
+                    sign[1] = -1;
+                    value = value.Substring(1);
+                }
+                coordinate[1] = _axises[value];
+            }
+
+            if(DictProperties.ContainsKey("z_inner"))
+            {
+                string value = (DictProperties["z_inner"] as PlyMultiProperty).Value;
+                if (value[0] == '-')
+                {
+                    sign[2] = -1;
+                    value = value.Substring(1);
+                }
+                coordinate[2] = _axises[value];
+            }
+        }
+
+        public float GetUnitToMeterRatio()
+        {
+            if (!IsValid)
+            {
+                return 1.0f;
+            }
+
+            string unit = (DictProperties["unit"] as PlyMultiProperty).Value;
+            if (unit == "mm")
+            {
+                return 0.001f;
+            }
+            else if (unit == "cm")
+            {
+                return 0.01f;
+            }
+
+            return 1.0f;
+        }
+
+        public CoordinateType GetCoordinateType()
+        {
+            if (!IsValid)
+            {
+                return CoordinateType.Left;
+            }
+
+            if ((DictProperties["coordinate"] as PlyMultiProperty).Value == "right")
+            {
+                return CoordinateType.Right;
+            }
+
+            return CoordinateType.Left;
         }
     }
 
@@ -622,17 +726,17 @@ namespace ThreeDeeBear.Models.Ply
         public PlyVertexElement VertexElement;
         public PlyFaceElement FaceElement;
         public PlyGlobalMaterialElement GloablMaterialElement;
-        public PlyGlobalNameElement GlobalNameElement;
+        public PlyGlobalMeshInfoElement GlobalMeshInfoElement;
 
         public List<string> RawHeader;
 
         public PlyHeader(List<string> headerUnparsed)
         {
             Format = GetFormat(headerUnparsed.FirstOrDefault(x => x.Contains("format")).Split(' ')[1]);
-            VertexElement = new PlyVertexElement(headerUnparsed);
-            FaceElement = new PlyFaceElement(headerUnparsed);
             GloablMaterialElement = new PlyGlobalMaterialElement(headerUnparsed);
-            GlobalNameElement = new PlyGlobalNameElement(headerUnparsed);
+            GlobalMeshInfoElement = new PlyGlobalMeshInfoElement(headerUnparsed);
+            VertexElement = new PlyVertexElement(headerUnparsed, this);
+            FaceElement = new PlyFaceElement(headerUnparsed);
             RawHeader = headerUnparsed;
         }
 

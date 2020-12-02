@@ -8,7 +8,7 @@ PLY (Polygon File Format) importer for Unity.
 - 增加了PlyElement基类，专门用来处理不同的element，方便后期进行扩展，目前支持PlyFaceElement，PlyVertexElement；
 - 增加了PlyProperty基类，处理不同的属性，按照属性的功能又分为PlyMultiProperty，用来支持单个property定义；PlyListProperty支持property list定义。
 
-## 支持的功能：
+## 支持的功能以及需要满足的要求
 
 ### 1. element vertex
 
@@ -70,30 +70,37 @@ comment property uchar alpha 255
 
 - `g_material`名字是固定的；`red,green,blue,alpha`名字是固定的，必须是`uchar`
 
-### 4. element g_name
+### 4. element g_meshinfo
 
 考虑到需要识别网格名称，引入该元素，具体如下：
 
 ```
-comment element g_name
+comment element g_meshinfo
 comment property string name what_ever_you_want
+comment property string unit mm               { one of cm/m/mm }
+comment property string x_inner x                   { one of x/y/z/-x/-y/-z}
+comment property string y_inner y                   { one of x/y/z/-x/-y/-z}
+comment property string z_inner z                   { one of x/y/z/-x/-y/-z}
+comment property string coordinate right      { one of right/left }
 ```
 
 其中：
 
-- `g_name`名字是不定的；
-- `name`名字是固定的；
-- `name`的类型必须是`string`；
+- `g_meshinfo`名字是不定的；
+- `name,unit,x_inner,y_inner,z_inner,coordinate`名字是固定的；
+- `name,unit,x_inner,y_inner,z_inner,coordinate`的类型必须是`string`；
 - 具体的名字`what_ever_you_want`中不能带空格；
+- `unit`的值为`mm/cm/m`中的一个;
+- `coordinate`的值为`right/left`中的一个，right表示右手坐标系，left表示左手坐标系；
+- `comment property string x_inner x`前一个`x_inner`指的是unity坐标系中的x轴，后一个x对应网格数据中的x轴；用于定义坐标变换；
+- property的顺序也可变化；
 
-### 5. Convert right hand coordinate to left hand coordinate
+### 5. data store order
 
-由于unity中的坐标是左手坐标系，而通常情况下，存储的网格模型的坐标系为右手坐标系，因此增加坐标系转换的逻辑。
+必须先存储顶点element，然后再存储face element；
 
 ## TODO
 
 - 支持PlyEdgeElement；
-- 考虑到Unity中的shader基本没有用到顶点的颜色，增加PlyMaterialElement用来设定材质颜色；
-- 通常对于加载的文件，需要知道该文件对应的网格名称，扩展comment支持更多的选项；
 - Support for Binary Big Endian
 - PLY exporting

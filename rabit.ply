@@ -6,8 +6,13 @@ comment property uchar red 255
 comment property uchar green 0
 comment property uchar blue 0
 comment property uchar alpha 255
-comment element g_name
+comment element g_meshinfo
 comment property string name rabit
+comment property string unit m      { one of cm/m/mm }
+comment property string x_inner x                   { one of x/y/z/-x/-y/-z}
+comment property string y_inner z                   { one of x/y/z/-x/-y/-z}
+comment property string z_inner y                   { one of x/y/z/-x/-y/-z}
+comment property string coordinate right      { one of right/left }
 element vertex 6462
 property float x
 property float y
