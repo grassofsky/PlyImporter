@@ -313,7 +313,6 @@ namespace ThreeDeeBear.Models.Ply
             _header.GlobalMeshInfoElement.GetCoordinateTransalte(out coordinateTranslate, out signs);
             float ratioToMeter = _header.GlobalMeshInfoElement.GetUnitToMeterRatio();
             float[] value = new float[3];
-            int normalSign = _header.GlobalMeshInfoElement.GetCoordinateType() == CoordinateType.Left ? 1 : -1;
             foreach (var vertexContent in vertexContents)
             {
                 var vertexProperties = vertexContent.Split(' ');
@@ -331,7 +330,7 @@ namespace ThreeDeeBear.Models.Ply
                     float.TryParse(vertexProperties[normalIndex[2]], NumberStyles.Float, CultureInfo.InvariantCulture, out value[2]);
                     Vector3 normal = new Vector3(value[coordinateTranslate[0]] * signs[0], value[coordinateTranslate[1]] * signs[1], value[coordinateTranslate[2]] * signs[2]) * ratioToMeter;
                     normal.Normalize();
-                    normals.Add(normal * normalSign);
+                    normals.Add(normal);
                 }
                 if (HasColor)
                 {
@@ -364,7 +363,6 @@ namespace ThreeDeeBear.Models.Ply
             _header.GlobalMeshInfoElement.GetCoordinateTransalte(out coordinateTranslate, out signs);
             float ratioToMeter = _header.GlobalMeshInfoElement.GetUnitToMeterRatio();
             float[] value = new float[3];
-            int normalSign = _header.GlobalMeshInfoElement.GetCoordinateType() == CoordinateType.Left ? 1 : -1;
             for (int i = 0; i < NElement; ++i)
             {
                 int byteIndex = i * bytesPerVertex;
@@ -390,7 +388,7 @@ namespace ThreeDeeBear.Models.Ply
                     value[2] = System.BitConverter.ToSingle(PlyElement.GetBytesSubarray(bytes, byteIndex + zmultiProperty.BytesOffset, zmultiProperty.ValueDataBytes), 0);
                     Vector3 normal = new Vector3(value[coordinateTranslate[0]]*signs[0], value[coordinateTranslate[1]]*signs[1], value[coordinateTranslate[2]]*signs[2]) * ratioToMeter;
                     normal.Normalize();
-                    normals.Add(normal * normalSign);
+                    normals.Add(normal);
                 }
 
                 if (HasColor)
@@ -462,8 +460,11 @@ namespace ThreeDeeBear.Models.Ply
 
     public class PlyFaceElement : PlyElement
     {
-        public PlyFaceElement(IList<string> headerUnparsed) : base("face")
+        private PlyHeader _plyHeader;
+
+        public PlyFaceElement(IList<string> headerUnparsed, PlyHeader header) : base("face")
         {
+            _plyHeader = header;
             if (!ParseElementInfo(headerUnparsed))
             {
                 IsValid = false;
@@ -477,6 +478,7 @@ namespace ThreeDeeBear.Models.Ply
         {
             triangles = new List<int>();
 
+            CoordinateType coordType = _plyHeader.GlobalMeshInfoElement.GetCoordinateType();
             foreach (var faceContent in faceContents)
             {
                 var split = faceContent.Split(' ');
@@ -489,7 +491,15 @@ namespace ThreeDeeBear.Models.Ply
                 }
 
                 List<int> triangle = split.ToList().GetRange(1, 3).Select(x => Convert.ToInt32(x)).ToList();
-                triangles.AddRange(triangle);
+                if (coordType == CoordinateType.Left)
+                {
+                    triangles.AddRange(triangle);
+                }
+                else // CoordinateType.Right
+                {
+                    List<int> newTriangle = new List<int>{ triangle[0], triangle[2], triangle[1] };
+                    triangles.AddRange(newTriangle);
+                }
             }
         }
 
@@ -504,7 +514,9 @@ namespace ThreeDeeBear.Models.Ply
             int facesRead = 0;
             int bytesRead = 0;
             int bytesPerTriangleIndex = 4;
+            CoordinateType coordType = _plyHeader.GlobalMeshInfoElement.GetCoordinateType();
 
+            int[] triangle = new int[3];
             while (facesRead < NElement)
             {
                 var faceIndex = bytesOffset + bytesRead;
@@ -513,8 +525,20 @@ namespace ThreeDeeBear.Models.Ply
                 {
                     for (int i=0; i<indexCount; ++i)
                     {
-                        triangles.Add(System.BitConverter.ToInt32(PlyElement.GetBytesSubarray(bytes, faceIndex + 1 + i * bytesPerTriangleIndex, bytesPerTriangleIndex), 0));
+                        triangle[i] = System.BitConverter.ToInt32(PlyElement.GetBytesSubarray(bytes, faceIndex + 1 + i * bytesPerTriangleIndex, bytesPerTriangleIndex), 0);
                     }
+                    if (coordType == CoordinateType.Left)
+                    {
+                        triangles.AddRange(triangle);
+                    }
+                    else // Coordinate.Right
+                    {
+                        int tmp = triangle[1];
+                        triangle[1] = triangle[2];
+                        triangle[2] = tmp;
+                        triangles.AddRange(triangle);
+                    }
+
                     bytesRead += 1 + indexCount * bytesPerTriangleIndex;
                 }
                 else
@@ -736,7 +760,7 @@ namespace ThreeDeeBear.Models.Ply
             GloablMaterialElement = new PlyGlobalMaterialElement(headerUnparsed);
             GlobalMeshInfoElement = new PlyGlobalMeshInfoElement(headerUnparsed);
             VertexElement = new PlyVertexElement(headerUnparsed, this);
-            FaceElement = new PlyFaceElement(headerUnparsed);
+            FaceElement = new PlyFaceElement(headerUnparsed, this);
             RawHeader = headerUnparsed;
         }
 
