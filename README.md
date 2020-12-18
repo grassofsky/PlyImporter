@@ -54,7 +54,40 @@ property list uchar int vertex_indices
 - list中的具体index类型支持int和uint两种格式；
 - list中的count类型为uchar；
 
-### 3. element g_material
+### 3. element line
+
+添加线的属性，用LineRenderer进行绘制；
+
+```
+element line 4
+property list uchar int vertex_indices
+```
+
+其中
+
+- `vertex_indices`的名字是固定的；
+- `line`的名字是固定的；
+- list中的具体index类型支持int和uint两种格式；
+- list中的count类型为uchar；
+
+### 4. element line_color
+
+添加线的颜色属性，用于设置LineRenderer的颜色；
+
+```
+element line_color 4
+property uchar red
+property uchar green
+property uchar blue
+property uchar alpha
+```
+
+其中，
+
+- `red,green,blue,alpha`属性必须同时出现；类型必须是`uchar`
+- `line_color`的名字是固定的；
+
+### 5. element g_material
 
 考虑到unity中提供的shader一般不支持顶点颜色设置，此处对常规的ply进行了一定的扩展；在comment区域给出全局元素和属性的设置；
 
@@ -70,7 +103,7 @@ comment property uchar alpha 255
 
 - `g_material`名字是固定的；`red,green,blue,alpha`名字是固定的，必须是`uchar`
 
-### 4. element g_meshinfo
+### 6. element g_meshinfo
 
 考虑到需要识别网格名称，引入该元素，具体如下：
 
@@ -95,7 +128,7 @@ comment property string coordinate right      { one of right/left }
 - `comment property string x_inner x`前一个`x_inner`指的是unity坐标系中的x轴，后一个x对应网格数据中的x轴；用于定义坐标变换；
 - property的顺序也可变化；
 
-### 5. data store order
+### 7. data store order
 
 必须先存储顶点element，然后再存储face element；
 

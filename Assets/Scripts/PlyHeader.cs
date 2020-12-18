@@ -148,7 +148,7 @@ namespace ThreeDeeBear.Models.Ply
     public abstract class PlyElement
     {
         public bool IsValid = true;
-        public int NElement;
+        public int NElement = 0;
         public IDictionary<string, PlyProperty> DictProperties = null;
 
         public string ElementName { set; get; } 
@@ -296,6 +296,14 @@ namespace ThreeDeeBear.Models.Ply
         public void ParseElement(IList<string> vertexContents, 
             out IList<Vector3> vertices, out IList<Vector3> normals, out IList<Color32> colors)
         {
+            if (NElement == 0)
+            {
+                vertices = null;
+                normals = null;
+                colors = null;
+                return;
+            }
+
             vertices = HasPosition ? new List<Vector3>() : null;
             normals = HasNormal ? new List<Vector3>() : null;
             colors = HasColor ? new List<Color32>() : null;
@@ -347,6 +355,15 @@ namespace ThreeDeeBear.Models.Ply
         public void ParseElementBinaryLittleEndian(byte[] bytes, out int bytesUsed,
             out IList<Vector3> vertices, out IList<Vector3> normals, out IList<Color32> colors)
         {
+            if (NElement == 0)
+            {
+                bytesUsed = 0;
+                vertices = null;
+                normals = null;
+                colors = null;
+                return;
+            }
+
             vertices = HasPosition ? new List<Vector3>() : null;
             normals = HasNormal ? new List<Vector3>() : null;
             colors = HasColor ? new List<Color32>() : null;
@@ -476,6 +493,12 @@ namespace ThreeDeeBear.Models.Ply
 
         public void ParseElement(IList<string> faceContents, out List<int> triangles)
         {
+            if (NElement == 0)
+            {
+                triangles = null;
+                return;
+            }
+
             triangles = new List<int>();
 
             CoordinateType coordType = _plyHeader.GlobalMeshInfoElement.GetCoordinateType();
@@ -486,8 +509,7 @@ namespace ThreeDeeBear.Models.Ply
                 if (count != 3)
                 {
                     Debug.LogWarning("Warning: Found a face is not a triangle face, skipping...");
-                    triangles = null;
-                    return;
+                    continue;
                 }
 
                 List<int> triangle = split.ToList().GetRange(1, 3).Select(x => Convert.ToInt32(x)).ToList();
@@ -506,6 +528,13 @@ namespace ThreeDeeBear.Models.Ply
         public void ParseElementBinaryLittleEndian(byte[] bytes, int bytesOffset, 
             out int bytesUsed, out List<int> triangles)
         {
+            if (NElement == 0)
+            {
+                bytesUsed = 0;
+                triangles = null;
+                return;
+            }
+
             var listProperty = DictProperties["vertex_indices"] as PlyListProperty;
             bytesUsed = PlyProperty.GetDataBytes(listProperty.CountNumFormat)+ NElement * 3 * PlyProperty.GetDataBytes(listProperty.ValueNumFormat);
             
@@ -559,7 +588,181 @@ namespace ThreeDeeBear.Models.Ply
                  listProperty.ValueNumFormat == PlyProperty.ENumFormat.nf_uint);
             isValid = isValid && (listProperty.CountNumFormat == PlyProperty.ENumFormat.nf_uchar);
 
-            return DictProperties.Count == 1 && isValid;
+            return isValid;
+        }
+    }
+
+
+    public class PlyLineElement : PlyElement
+    {
+        public PlyLineElement(IList<string> headerUnparsed) : base("line")
+        {
+            if (!ParseElementInfo(headerUnparsed))
+            {
+                IsValid = false;
+                return;
+            }
+
+            IsValid = IsValid && IsElementValid();
+        }
+
+        public void ParseElement(IList<string> lineContents, out List<List<int>> lines)
+        {
+            if (NElement == 0)
+            {
+                lines = null;
+                return;
+            }
+
+            lines = new List<List<int>>();
+
+            foreach (var lineContent in lineContents)
+            {
+                var split = lineContent.Split(' ').ToList();
+                var count = Convert.ToInt32(split[0]);
+                if (count < 2)
+                {
+                    Debug.LogWarning("Warning: Found a line points < 2, skipping...");
+                    continue;
+                }
+
+                List<int> line = split.GetRange(1, split.Count-1).Select(x => Convert.ToInt32(x)).ToList();
+                lines.Add(line);
+            }
+        }
+
+        // TODO: test
+        public void ParseElementBinaryLittleEndian(byte[] bytes, int bytesOffset, out int bytesUsed, out List<List<int>> lines)
+        {
+            if (NElement == 0)
+            {
+                bytesUsed = 0;
+                lines = null;
+                return;
+            }
+
+            lines = new List<List<int>>();
+
+            int linesRead = 0;
+            int bytesRead = 0;
+            int bytesPerLineIndex = 4;
+
+            int[] triangle = new int[3];
+            while (linesRead < NElement)
+            {
+                var lineIndex = bytesOffset + bytesRead;
+
+                var count = bytes[lineIndex];
+                bytesRead += 1 + count * bytesPerLineIndex;
+                if (count < 2)
+                {
+                    Debug.LogWarning("Warning: Found a line points < 2, skipping...");
+                    continue;
+                }
+
+                var line = new List<int>();
+                for (int i = 0; i < count; ++i)
+                {
+                    line.Add(System.BitConverter.ToInt32(PlyElement.GetBytesSubarray(bytes, lineIndex + 1 + i * bytesPerLineIndex, bytesPerLineIndex), 0));
+                }
+                lines.Add(line);
+                linesRead++;
+            }
+            bytesUsed = bytesRead;
+        }
+
+
+        private bool IsElementValid()
+        {
+            bool isValid = DictProperties.Count == 1 && DictProperties.ContainsKey("vertex_indices");
+
+
+            var listProperty = (DictProperties["vertex_indices"] as PlyListProperty);
+            isValid = isValid &&
+                (listProperty.ValueNumFormat == PlyProperty.ENumFormat.nf_int ||
+                 listProperty.ValueNumFormat == PlyProperty.ENumFormat.nf_uint);
+            isValid = isValid && (listProperty.CountNumFormat == PlyProperty.ENumFormat.nf_uchar);
+
+            return isValid;
+        }
+    }
+
+    public class PlyLineColorElement : PlyElement
+    {
+        public PlyLineColorElement(IList<string> headerUnparsed) : base("line_color")
+        {
+            if (!ParseElementInfo(headerUnparsed))
+            {
+                IsValid = false;
+                return;
+            }
+
+            IsValid = IsValid && IsElementValid();
+        }
+
+        public void ParseElement(IList<string> lineContents, out List<Color32> lineColors)
+        {
+            if (NElement == 0)
+            {
+                lineColors = null;
+                return;
+            }
+
+            lineColors = new List<Color32>();
+
+            foreach (var lineContent in lineContents)
+            {
+                var split = lineContent.Split(' ').ToList();
+                Color32 color = new Color32(Convert.ToByte(split[0]), Convert.ToByte(split[1]), Convert.ToByte(split[2]), Convert.ToByte(split[3]));
+                lineColors.Add(color);
+            }
+        }
+
+        public void ParseElementBinaryLittleEndian(byte[] bytes, int bytesOffset, out int bytesUsed, out List<Color32> lineColors)
+        {
+            if (NElement == 0)
+            {
+                bytesUsed = 0;
+                lineColors = null;
+                return;
+            }
+
+            lineColors = new List<Color32>();
+
+            int linesRead = 0;
+            int bytesRead = 0;
+
+            int[] triangle = new int[3];
+            while (linesRead < NElement)
+            {
+                var lineIndex = bytesOffset + bytesRead;
+
+                // First read color info
+                PlyMultiProperty redmultiProperty = (DictProperties["red"] as PlyMultiProperty);
+                PlyMultiProperty greenmultiProperty = (DictProperties["green"] as PlyMultiProperty);
+                PlyMultiProperty bluemultiProperty = (DictProperties["blue"] as PlyMultiProperty);
+                PlyMultiProperty alphamultiProperty = (DictProperties["alpha"] as PlyMultiProperty);
+                byte r = bytes[lineIndex + redmultiProperty.BytesOffset];
+                byte g = bytes[lineIndex + greenmultiProperty.BytesOffset];
+                byte b = bytes[lineIndex + bluemultiProperty.BytesOffset];
+                byte a = bytes[lineIndex + alphamultiProperty.BytesOffset];
+
+                lineColors.Add(new Color32(r, g, b, a));
+                bytesRead += 4; // rgba 4 bytes
+
+                linesRead++;
+            }
+            bytesUsed = bytesRead;
+        }
+
+        private bool IsElementValid()
+        {
+            bool isValid = DictProperties.Count == 4 && DictProperties.ContainsKey("red") && DictProperties.ContainsKey("blue") &&
+                DictProperties.ContainsKey("green") && DictProperties.ContainsKey("alpha");
+
+            isValid = isValid && CheckValueDataTypeEqual(new List<string> { "red", "green", "blue", "alpha" }, PlyProperty.ENumFormat.nf_uchar);
+
+            return isValid;
         }
     }
 
@@ -749,6 +952,8 @@ namespace ThreeDeeBear.Models.Ply
         public PlyFormat Format;
         public PlyVertexElement VertexElement;
         public PlyFaceElement FaceElement;
+        public PlyLineElement LineElement;
+        public PlyLineColorElement LineColorElement;
         public PlyGlobalMaterialElement GloablMaterialElement;
         public PlyGlobalMeshInfoElement GlobalMeshInfoElement;
 
@@ -761,6 +966,8 @@ namespace ThreeDeeBear.Models.Ply
             GlobalMeshInfoElement = new PlyGlobalMeshInfoElement(headerUnparsed);
             VertexElement = new PlyVertexElement(headerUnparsed, this);
             FaceElement = new PlyFaceElement(headerUnparsed, this);
+            LineElement = new PlyLineElement(headerUnparsed);
+            LineColorElement = new PlyLineColorElement(headerUnparsed);
             RawHeader = headerUnparsed;
         }
 
