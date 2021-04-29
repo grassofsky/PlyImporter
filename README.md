@@ -1,4 +1,7 @@
 # PlyImporter
+
+**更好的ply parser见：https://github.com/grassofsky/TinyplyCSharp**
+
 原始项目的说明见：https://github.com/3DBear/PlyImporter
 
 PLY (Polygon File Format) importer for Unity.
